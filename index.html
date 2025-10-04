@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TTS Bazi - Suara Bijaksana</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom scrollbar for a better look */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #1e293b; /* slate-800 */
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background-color: #475569; /* slate-600 */
+            border-radius: 20px;
+            border: 3px solid #1e293b; /* slate-800 */
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-white flex items-center justify-center min-h-screen p-4">
+
+    <div class="w-full max-w-2xl mx-auto">
+        <div class="bg-slate-800 rounded-2xl shadow-2xl p-6 sm:p-8 border border-slate-700">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl sm:text-4xl font-bold text-indigo-400">Generator Suara Bazi</h1>
+                <p class="text-slate-400 mt-2">Ubah teks menjadi suara bijaksana.</p>
+            </div>
+
+            <!-- Text Input -->
+            <div class="mb-6">
+                <label for="text-input" class="block mb-2 text-sm font-medium text-slate-300">Teks Anda:</label>
+                <textarea id="text-input" rows="8" class="bg-slate-900 border border-slate-700 text-slate-200 text-base rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 block w-full p-4 transition duration-200" placeholder="Masukkan teks di sini..."></textarea>
+            </div>
+
+            <!-- Language Selection -->
+            <div class="mb-6">
+                <label class="block mb-2 text-sm font-medium text-slate-300">Pilih Bahasa:</label>
+                <div class="flex space-x-4">
+                    <button id="lang-id" class="lang-btn flex-1 bg-indigo-600 text-white font-semibold py-3 px-4 rounded-lg transition duration-200">
+                        Bahasa Indonesia
+                    </button>
+                    <button id="lang-en" class="lang-btn flex-1 bg-slate-700 text-slate-300 font-semibold py-3 px-4 rounded-lg transition duration-200 hover:bg-slate-600">
+                        English
+                    </button>
+                </div>
+            </div>
+
+            <!-- Generate Button -->
+            <button id="generate-btn" class="w-full bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-900 disabled:text-slate-400 disabled:cursor-not-allowed text-white font-bold py-3 px-4 rounded-lg transition duration-200 ease-in-out transform hover:scale-105 flex items-center justify-center space-x-2">
+                <svg id="spinner" class="animate-spin -ml-1 mr-3 h-5 w-5 text-white hidden" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <span id="btn-text">Generate Suara</span>
+            </button>
+            
+            <!-- Status & Audio Player -->
+            <div id="status-container" class="mt-6 text-center">
+                 <p id="error-message" class="text-red-400 hidden"></p>
+            </div>
+            <div id="audio-container" class="mt-6 hidden">
+                <audio id="audio-player" controls class="w-full rounded-lg"></audio>
+            </div>
+        </div>
+        <footer class="text-center mt-6 text-slate-500 text-sm">
+            Dibuat dengan Gemini API
+        </footer>
+    </div>
+
+    <script>
+        const textInput = document.getElementById('text-input');
+        const generateBtn = document.getElementById('generate-btn');
+        const btnText = document.getElementById('btn-text');
+        const spinner = document.getElementById('spinner');
+        const audioContainer = document.getElementById('audio-container');
+        const audioPlayer = document.getElementById('audio-player');
+        const errorMessage = document.getElementById('error-message');
+        const langIdBtn = document.getElementById('lang-id');
+        const langEnBtn = document.getElementById('lang-en');
+        
+        // --- State ---
+        let selectedLang = 'id'; // Default to Indonesian
+        let isLoading = false;
+
+        // --- Gemini API Configuration ---
+        const API_KEY = "AIzaSyDbKoWBQvWip66tuY4pTcbY0kP4rpbBY-4"; // Kunci API akan di-handle oleh environment, biarkan kosong.
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${API_KEY}`;
+        const VOICE_NAME = 'Sadaltager'; // Suara pria yang terdengar dewasa dan berwibawa.
+
+        // --- Event Listeners ---
+        langIdBtn.addEventListener('click', () => setLanguage('id'));
+        langEnBtn.addEventListener('click', () => setLanguage('en'));
+        generateBtn.addEventListener('click', handleGeneration);
+
+        // --- Functions ---
+        function setLanguage(lang) {
+            selectedLang = lang;
+            if (lang === 'id') {
+                langIdBtn.classList.replace('bg-slate-700', 'bg-indigo-600');
+                langIdBtn.classList.replace('text-slate-300', 'text-white');
+                langEnBtn.classList.replace('bg-indigo-600', 'bg-slate-700');
+                langEnBtn.classList.replace('text-white', 'text-slate-300');
+            } else {
+                langEnBtn.classList.replace('bg-slate-700', 'bg-indigo-600');
+                langEnBtn.classList.replace('text-slate-300', 'text-white');
+                langIdBtn.classList.replace('bg-indigo-600', 'bg-slate-700');
+                langIdBtn.classList.replace('text-white', 'text-slate-300');
+            }
+        }
+        
+        function setLoadingState(loading) {
+            isLoading = loading;
+            generateBtn.disabled = loading;
+            spinner.classList.toggle('hidden', !loading);
+            btnText.textContent = loading ? 'Memproses...' : 'Generate Suara';
+        }
+
+        function displayError(message) {
+            errorMessage.textContent = message;
+            errorMessage.classList.remove('hidden');
+            audioContainer.classList.add('hidden');
+        }
+        
+        function clearStatus() {
+            errorMessage.classList.add('hidden');
+        }
+
+        async function handleGeneration() {
+            if (isLoading) return;
+
+            const text = textInput.value.trim();
+            if (!text) {
+                displayError('Teks tidak boleh kosong, cuy!');
+                return;
+            }
+
+            setLoadingState(true);
+            clearStatus();
+            
+            // Menggunakan natural language untuk memberi instruksi pada model
+            const prompt = `Ucapkan dengan nada yang tenang dan bijaksana, seolah-olah seorang guru sedang menasihati muridnya. Bahasa: ${selectedLang === 'id' ? 'Indonesia' : 'Inggris'}. Teksnya adalah: "${text}"`;
+
+            const payload = {
+                model: "gemini-2.5-flash-preview-tts",
+                contents: [{
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    responseModalities: ["AUDIO"],
+                    speechConfig: {
+                        voiceConfig: {
+                            prebuiltVoiceConfig: { voiceName: VOICE_NAME }
+                        }
+                    }
+                }
+            };
+
+            try {
+                const response = await fetchWithRetry(API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error?.message || `HTTP error! status: ${response.status}`);
+                }
+
+                const result = await response.json();
+                const part = result?.candidates?.[0]?.content?.parts?.[0];
+                const audioData = part?.inlineData?.data;
+                const mimeType = part?.inlineData?.mimeType;
+
+                if (audioData && mimeType && mimeType.startsWith("audio/")) {
+                    const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+                    if (!sampleRateMatch) throw new Error("Sample rate tidak ditemukan di mime type.");
+                    
+                    const sampleRate = parseInt(sampleRateMatch[1], 10);
+                    const pcmData = base64ToArrayBuffer(audioData);
+                    const pcm16 = new Int16Array(pcmData);
+                    const wavBlob = pcmToWav(pcm16, 1, sampleRate); // 1 channel (mono)
+                    const audioUrl = URL.createObjectURL(wavBlob);
+
+                    audioPlayer.src = audioUrl;
+                    audioContainer.classList.remove('hidden');
+                    audioPlayer.play();
+                } else {
+                    throw new Error("Respon API tidak valid atau tidak mengandung data audio.");
+                }
+
+            } catch (error) {
+                console.error('Error:', error);
+                displayError(`Gagal generate suara, cuy. Coba lagi nanti. (${error.message})`);
+            } finally {
+                setLoadingState(false);
+            }
+        }
+        
+        // --- API & Audio Helper Functions ---
+
+        async function fetchWithRetry(url, options, retries = 3, delay = 1000) {
+            for (let i = 0; i < retries; i++) {
+                try {
+                    const response = await fetch(url, options);
+                    if (response.status !== 429) { // Not a rate limit error
+                        return response;
+                    }
+                    // If rate limited, wait and retry
+                } catch (error) {
+                    if (i === retries - 1) throw error; // Rethrow last error
+                }
+                await new Promise(resolve => setTimeout(resolve, delay * Math.pow(2, i)));
+            }
+        }
+
+        function base64ToArrayBuffer(base64) {
+            const binaryString = window.atob(base64);
+            const len = binaryString.length;
+            const bytes = new Uint8Array(len);
+            for (let i = 0; i < len; i++) {
+                bytes[i] = binaryString.charCodeAt(i);
+            }
+            return bytes.buffer;
+        }
+
+        function pcmToWav(pcmData, numChannels, sampleRate) {
+            const OVERSAMPLING_FACTOR = 1.0;
+            const bytesPerSample = 2; // 16-bit
+            const blockAlign = numChannels * bytesPerSample;
+            const byteRate = sampleRate * blockAlign;
+            const dataSize = pcmData.length * bytesPerSample;
+            const buffer = new ArrayBuffer(44 + dataSize);
+            const view = new DataView(buffer);
+            
+            function writeString(view, offset, string) {
+                for (let i = 0; i < string.length; i++) {
+                    view.setUint8(offset + i, string.charCodeAt(i));
+                }
+            }
+            
+            // RIFF header
+            writeString(view, 0, 'RIFF');
+            view.setUint32(4, 36 + dataSize, true);
+            writeString(view, 8, 'WAVE');
+            
+            // fmt chunk
+            writeString(view, 12, 'fmt ');
+            view.setUint32(16, 16, true);
+            view.setUint16(20, 1, true); // PCM
+            view.setUint16(22, numChannels, true);
+            view.setUint32(24, sampleRate * OVERSAMPLING_FACTOR, true);
+            view.setUint32(28, byteRate, true);
+            view.setUint16(32, blockAlign, true);
+            view.setUint16(34, 16, true); // 16-bit
+            
+            // data chunk
+            writeString(view, 36, 'data');
+            view.setUint32(40, dataSize, true);
+            
+            // PCM data
+            for (let i = 0; i < pcmData.length; i++) {
+                view.setInt16(44 + i * 2, pcmData[i], true);
+            }
+            
+            return new Blob([view], { type: 'audio/wav' });
+        }
+    </script>
+</body>
+</html>
